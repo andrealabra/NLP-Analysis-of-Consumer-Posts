@@ -44,8 +44,6 @@ This project takes a fresh look at diabetes by examining what patients and careg
 
 ### 🛠️ Usage
 
-```
-
 ---
 
 ### 📊 Example Output
