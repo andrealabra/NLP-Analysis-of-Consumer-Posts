@@ -1,0 +1,316 @@
+---
+title: "NLP Analysis of Consumer Posts"
+format:
+  html:
+    self-contained: true
+    toc: true                 
+    code-fold: true           
+    code-tools: true   
+editor: visual
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## NLP Analysis of Consumer Posts
+
+```{r}
+#install.packages(c("tidyverse", "stringr", "dplyr", "quanteda", "tidytext", "readxl", "httr"))
+
+
+library(tidyverse)
+library(stringr)
+library(dplyr)
+library(quanteda)
+library(tidytext)
+library(readxl)
+library(httr)
+
+```
+
+## Load Data No Reddit
+
+```{r}
+#install.packages("readxl")
+#install.packages("httr")
+
+library(readxl)
+library(httr)
+
+url <- "https://raw.githubusercontent.com/andrealabra/NLP-Analysis-of-Consumer-Posts/main/(Clean)%20Diabetes%20Geo%20US%20No%20Reddit%202023%2050K%20rows.xlsx"
+
+temp_file <- tempfile(fileext = ".xlsx")
+GET(url, write_disk(temp_file, overwrite = TRUE))
+
+dataNoReddit <- read_excel(temp_file)
+
+head(dataNoReddit)
+unlink(temp_file)
+
+```
+
+## Load Data Reddit
+
+```{r}
+url2 <- "https://raw.githubusercontent.com/andrealabra/NLP-Analysis-of-Consumer-Posts/main/(Clean)%20Diabetes%20Reddit%20Data%20Combined.xlsx"
+
+temp_file2 <- tempfile(fileext = ".xlsx")
+GET(url2, write_disk(temp_file2, overwrite = TRUE))
+
+dataReddit <- read_excel(temp_file2)
+
+head(dataReddit)
+
+unlink(temp_file2)
+
+```
+
+## Task 1 - Completed in Excel 
+
+## Task 2 
+
+Using regular expressions
+
+```{r}
+# Count diabetes types in Reddit and Non-Reddit datasets
+diabetes_counts <- function(data) {
+  data %>%
+    mutate(
+      type1 = str_detect(`Sound Bite Text`, regex("Type 1", ignore_case = TRUE)),
+      type2 = str_detect(`Sound Bite Text`, regex("Type 2", ignore_case = TRUE)),
+      gestational = str_detect(`Sound Bite Text`, regex("gestational", ignore_case = TRUE))
+    ) %>%
+    summarise(
+      type1_count = sum(type1, na.rm = TRUE),
+      type2_count = sum(type2, na.rm = TRUE),
+      gestational_count = sum(gestational, na.rm = TRUE)
+    )
+}
+
+# Applying the function to each dataset
+diabetes_counts_NoReddit <- diabetes_counts(dataNoReddit)
+diabetes_counts_Reddit <- diabetes_counts(dataReddit)
+
+# View results
+diabetes_counts_NoReddit
+diabetes_counts_Reddit
+
+```
+
+## Task 3 
+
+```{r}
+# Define comorbidity keywords
+comorbidities <- c("obesity", "weight management", "heart health", "high blood pressure", "kidney issues")
+
+# Function to count comorbidities
+count_comorbidities <- function(data) {
+  # Create a list to store counts for each comorbidity
+  counts <- sapply(comorbidities, function(term) {
+    sum(str_detect(data$`Sound Bite Text`, regex(term, ignore_case = TRUE)), na.rm = TRUE)
+  })
+  
+  # Convert the counts to a data frame
+  as.data.frame(t(counts))
+}
+
+# Applying the function to each dataset
+reddit_comorbidities <- count_comorbidities(dataReddit)
+non_reddit_comorbidities <- count_comorbidities(dataNoReddit)
+
+
+reddit_comorbidities
+non_reddit_comorbidities
+
+```
+
+## Task 4 
+
+where you want a comparison of basic statistics between the `dataReddit` and `dataNoReddit` datasets, including metrics like average word count and unique word frequency
+
+```{r}
+
+# Function to compute basic text statistics
+compare_datasets <- function(data, dataset_name) {
+  data %>%
+    mutate(
+      word_count = str_count(`Sound Bite Text`, "\\w+"),
+      unique_words = map_int(str_split(`Sound Bite Text`, "\\s+"), ~ length(unique(.x)))
+    ) %>%
+    summarise(
+      dataset = dataset_name,
+      avg_word_count = mean(word_count, na.rm = TRUE),
+      avg_unique_words = mean(unique_words, na.rm = TRUE),
+      total_entries = n()
+    )
+}
+
+# Applying the function to each dataset with distinct names
+reddit_stats <- compare_datasets(dataReddit, "Reddit Dataset")
+non_reddit_stats <- compare_datasets(dataNoReddit, "Non-Reddit Dataset")
+
+# Combine results to compare
+comparison_results <- bind_rows(reddit_stats, non_reddit_stats)
+
+# View comparison results
+comparison_results
+
+```
+
+## Task 5 
+
+```{r}
+
+count_insulin <- function(data, dataset_name) {
+  data %>%
+    mutate(
+      insulin_mention = str_detect(`Sound Bite Text`, regex("insulin", ignore_case = TRUE)),
+      insulin_cost = str_detect(`Sound Bite Text`, regex("cost|price|expense", ignore_case = TRUE)),
+      insulin_cap = str_detect(`Sound Bite Text`, regex("medicare", ignore_case = TRUE))
+    ) %>%
+    summarise(
+      dataset = dataset_name,
+      insulin_mentions = sum(insulin_mention, na.rm = TRUE),
+      insulin_cost_mentions = sum(insulin_mention & insulin_cost, na.rm = TRUE),
+      medicare_cap_mentions = sum(insulin_mention & insulin_cap, na.rm = TRUE),
+      total_entries = n()
+    )
+}
+
+
+reddit_insulin_mentions <- count_insulin(dataReddit, "Reddit Dataset")
+non_reddit_insulin_mentions <- count_insulin(dataNoReddit, "Non-Reddit Dataset")
+
+# Combine results to compare
+insulin_comparison <- bind_rows(reddit_insulin_mentions, non_reddit_insulin_mentions)
+
+
+insulin_comparison
+
+```
+
+## Task 6 
+
+Direct Word Counting of the key words
+
+a)  cost b) price/expense c) pharma companies d) government/public health agencies
+
+**Direct Counting**: We first identified specific terms related to cost, price, pharma companies, and government agencies. We used regular expressions to count occurrences of these terms in each dataset.
+
+```{r}
+keywords <- list(
+  cost = "cost",
+  price_expense = "price|expense",
+  pharma_companies = "pharma|pharmaceutical|drug company|drug companies",
+  government_public_health = "government|public health|health agency|medicare|medicaid"
+)
+
+# Function to count topic mentions
+count_topics <- function(data, dataset_name) {
+  data %>%
+    mutate(
+      cost_mention = str_detect(`Sound Bite Text`, regex(keywords$cost, ignore_case = TRUE)),
+      price_expense_mention = str_detect(`Sound Bite Text`, regex(keywords$price_expense, ignore_case = TRUE)),
+      pharma_mention = str_detect(`Sound Bite Text`, regex(keywords$pharma_companies, ignore_case = TRUE)),
+      government_mention = str_detect(`Sound Bite Text`, regex(keywords$government_public_health, ignore_case = TRUE))
+    ) %>%
+    summarise(
+      dataset = dataset_name,
+      cost_mentions = sum(cost_mention, na.rm = TRUE),
+      price_expense_mentions = sum(price_expense_mention, na.rm = TRUE),
+      pharma_mentions = sum(pharma_mention, na.rm = TRUE),
+      government_mentions = sum(government_mention, na.rm = TRUE),
+      total_entries = n()
+    )
+}
+
+reddit_topic_counts <- count_topics(dataReddit, "Reddit Dataset")
+non_reddit_topic_counts <- count_topics(dataNoReddit, "Non-Reddit Dataset")
+
+
+topic_comparison <- bind_rows(reddit_topic_counts, non_reddit_topic_counts)
+
+topic_comparison
+
+
+```
+
+Topic Modeling
+
+```{r}
+#install.packages("topicmodels")
+#install.packages("tidytext")
+
+library(topicmodels)
+library(tidytext)
+
+
+```
+
+1\. Prepare the Data and Create the DTM (Document-Term Matrix)
+
+```{r}
+
+# Prepare data function, removing stop words and creating DTM
+prepare_for_topic_modeling <- function(data) {
+  tokenized_data <- data %>%
+    unnest_tokens(word, `Sound Bite Text`) %>%
+    anti_join(stop_words, by = "word") %>%
+    count(row_number(), word, sort = TRUE) %>%
+    cast_dtm(document = row_number(), term = word, value = n)
+  
+  return(tokenized_data)
+}
+
+# Create DTM for Reddit and Non-Reddit datasets
+dtm_reddit <- prepare_for_topic_modeling(dataReddit)
+dtm_non_reddit <- prepare_for_topic_modeling(dataNoReddit)
+
+```
+
+2\. Apply LDA to Identify Topics
+
+```{r}
+library(topicmodels)
+
+num_topics <- 7
+
+# Run LDA for both datasets
+reddit_lda <- LDA(dtm_reddit, k = num_topics, control = list(seed = 123))
+non_reddit_lda <- LDA(dtm_non_reddit, k = num_topics, control = list(seed = 123))
+
+
+```
+
+3\. Extract and Interpret Topics by Examining Top Terms
+
+```{r}
+library(tidytext)
+
+# Define a function to get the top terms for each topic
+get_top_terms <- function(lda_model, num_terms = 5) {
+  topics <- tidy(lda_model, matrix = "beta") %>%
+    group_by(topic) %>%
+    slice_max(beta, n = num_terms) %>%
+    ungroup() %>%
+    arrange(topic, -beta)
+  
+  return(topics)
+}
+
+
+top_terms_reddit <- get_top_terms(reddit_lda)
+top_terms_non_reddit <- get_top_terms(non_reddit_lda)
+
+top_terms_reddit
+top_terms_non_reddit
+
+
+```
+
+-   **topic**: The topic number.
+
+-   **term**: The word or term associated with the topic.
+
+-   **beta**: The probability of the term within the topic.
