@@ -1,0 +1,437 @@
+---
+title: "NLP Analysis of Consumer Posts"
+format:
+  html:
+    self-contained: true
+    toc: true                 
+    code-fold: true           
+    code-tools: true   
+editor: visual
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## NLP Analysis of Consumer Posts
+
+```{r}
+library(tidyverse) # dplyr, tidyr, stringr
+library(quanteda)
+library(tidytext)
+library(readxl)
+library(httr) # http library
+library(topicmodels)
+library(syuzhet) # Sentiment analysis
+library(sentimentr) # Sentiment analysis
+```
+
+## Load data locally instead of from GitHub
+```{r}
+dataNoReddit <- read_csv(here::here("data_clean/dataNoReddit.csv"))
+dataReddit <- read_csv(here::here("data_clean/dataReddit.csv"))
+```
+
+
+## Load Data No Reddit
+
+```{r}
+# url <- "https://raw.githubusercontent.com/andrealabra/NLP-Analysis-of-Consumer-Posts/main/(Clean)%20Diabetes%20Geo%20US%20No%20Reddit%202023%2050K%20rows.xlsx"
+# 
+# temp_file <- tempfile(fileext = ".xlsx")
+# GET(url, write_disk(temp_file, overwrite = TRUE))
+# 
+# dataNoReddit <- read_excel(temp_file)
+# 
+# head(dataNoReddit)
+# unlink(temp_file)
+
+```
+
+## Load Data Reddit
+
+```{r}
+# url2 <- "https://raw.githubusercontent.com/andrealabra/NLP-Analysis-of-Consumer-Posts/main/(Clean)%20Diabetes%20Reddit%20Data%20Combined.xlsx"
+# 
+# temp_file2 <- tempfile(fileext = ".xlsx")
+# GET(url2, write_disk(temp_file2, overwrite = TRUE))
+# 
+# dataReddit <- read_excel(temp_file2)
+# 
+# head(dataReddit)
+# 
+# unlink(temp_file2)
+
+```
+
+## Task 1 - Filtered out spam by keywords
+```{r}
+# Define spam keywords
+spam_keywords <- c(
+  "cashapp", "venmo", "zelle", "paypal", "whatsapp", 
+  "free", "click here", "urgent", "money", 
+  "prize", "win", "offer", "deal", "limited time", 
+  "act now", "don't miss out", "exclusive deal", "risk-free", 
+  "guaranteed", "100% free", "click below", "free gift", 
+  "trial", "no cost", "credit", "debt", "investment", 
+  "earn money", "make money", "work from home", 
+  "job opportunity", "apply now", "get paid", "bonus", 
+  "cash bonus", "cash prize", "affordable", "save big", 
+  "bargain", "special promotion", "special offer", 
+  "instant", "quick", "easy", "referral", "sign up", 
+  "subscribe", "earn cash", "collect", "be your own boss", 
+  "extra income", "business opportunity", "money-making", 
+  "multi-level marketing", "network marketing", "spam", 
+  "viagra", "cialis", "buy direct", "stop snoring", 
+  "miracle", "wonder", "unsecured credit", "act now", 
+  "find out more", "information you requested", "limited offer"
+)
+
+
+
+# Create a regex pattern from the spam keywords
+pattern <- paste(spam_keywords, collapse = "|")
+
+# Filter out rows containing spam keywords
+dataReddit <- dataReddit %>%
+  filter(!grepl(pattern, dataReddit$'Sound Bite Text', ignore.case = TRUE))
+
+dataNoReddit <- dataNoReddit %>%
+  filter(!grepl(pattern, dataNoReddit$'Sound Bite Text', ignore.case = TRUE))
+
+
+#write.csv(dataReddit, file = "dataReddit.csv", row.names = FALSE)
+#write.csv(dataNoReddit, file = "dataNoReddit.csv", row.names = FALSE)
+```
+
+
+
+## Task 2
+
+Using regular expressions
+
+```{r}
+# Count diabetes types in Reddit and Non-Reddit datasets
+diabetes_counts <- function(data) {
+  data %>%
+    mutate(
+      type1 = str_detect(`Sound Bite Text`, regex("Type 1", ignore_case = TRUE)),
+      type2 = str_detect(`Sound Bite Text`, regex("Type 2", ignore_case = TRUE)),
+      gestational = str_detect(`Sound Bite Text`, regex("gestational", ignore_case = TRUE))
+    ) %>%
+    summarise(
+      type1_count = sum(type1, na.rm = TRUE),
+      type2_count = sum(type2, na.rm = TRUE),
+      gestational_count = sum(gestational, na.rm = TRUE)
+    )
+}
+
+# Applying the function to each dataset
+diabetes_counts_NoReddit <- diabetes_counts(dataNoReddit)
+diabetes_counts_Reddit <- diabetes_counts(dataReddit)
+
+# View results
+diabetes_counts_NoReddit
+diabetes_counts_Reddit
+
+```
+
+## Task 3
+
+```{r}
+# Define comorbidity keywords
+comorbidities <- c("obesity", "weight management", "heart health", "high blood pressure", "kidney issues")
+
+# Function to count comorbidities
+count_comorbidities <- function(data) {
+  # Create a list to store counts for each comorbidity
+  counts <- sapply(comorbidities, function(term) {
+    sum(str_detect(data$`Sound Bite Text`, regex(term, ignore_case = TRUE)), na.rm = TRUE)
+  })
+  
+  # Convert the counts to a data frame
+  as.data.frame(t(counts))
+}
+
+# Applying the function to each dataset
+reddit_comorbidities <- count_comorbidities(dataReddit)
+non_reddit_comorbidities <- count_comorbidities(dataNoReddit)
+
+
+reddit_comorbidities
+non_reddit_comorbidities
+
+```
+
+## Task 4
+
+where you want a comparison of basic statistics between the `dataReddit` and `dataNoReddit` datasets, including metrics like average word count and unique word frequency
+
+```{r}
+
+# Function to compute basic text statistics
+compare_datasets <- function(data, dataset_name) {
+  data %>%
+    mutate(
+      word_count = str_count(`Sound Bite Text`, "\\w+"),
+      unique_words = map_int(str_split(`Sound Bite Text`, "\\s+"), ~ length(unique(.x)))
+    ) %>%
+    summarise(
+      dataset = dataset_name,
+      avg_word_count = mean(word_count, na.rm = TRUE),
+      avg_unique_words = mean(unique_words, na.rm = TRUE),
+      total_entries = n()
+    )
+}
+
+# Applying the function to each dataset with distinct names
+reddit_stats <- compare_datasets(dataReddit, "Reddit Dataset")
+non_reddit_stats <- compare_datasets(dataNoReddit, "Non-Reddit Dataset")
+
+# Combine results to compare
+comparison_results <- bind_rows(reddit_stats, non_reddit_stats)
+
+# View comparison results
+comparison_results
+
+```
+
+## Task 5
+
+```{r}
+
+count_insulin <- function(data, dataset_name) {
+  data %>%
+    mutate(
+      insulin_mention = str_detect(`Sound Bite Text`, regex("insulin", ignore_case = TRUE)),
+      insulin_cost = str_detect(`Sound Bite Text`, regex("cost|price|expense", ignore_case = TRUE)),
+      insulin_cap = str_detect(`Sound Bite Text`, regex("medicare", ignore_case = TRUE))
+    ) %>%
+    summarise(
+      dataset = dataset_name,
+      insulin_mentions = sum(insulin_mention, na.rm = TRUE),
+      insulin_cost_mentions = sum(insulin_mention & insulin_cost, na.rm = TRUE),
+      medicare_cap_mentions = sum(insulin_mention & insulin_cap, na.rm = TRUE),
+      total_entries = n()
+    )
+}
+
+
+reddit_insulin_mentions <- count_insulin(dataReddit, "Reddit Dataset")
+non_reddit_insulin_mentions <- count_insulin(dataNoReddit, "Non-Reddit Dataset")
+
+# Combine results to compare
+insulin_comparison <- bind_rows(reddit_insulin_mentions, non_reddit_insulin_mentions)
+
+
+insulin_comparison
+
+```
+
+## Task 6
+
+Direct Word Counting of the key words
+
+a)  cost b) price/expense c) pharma companies d) government/public health agencies
+
+**Direct Counting**: We first identified specific terms related to cost, price, pharma companies, and government agencies. We used regular expressions to count occurrences of these terms in each dataset.
+
+```{r}
+keywords <- list(
+  cost = "cost",
+  price_expense = "price|expense",
+  pharma_companies = "pharma|pharmaceutical|drug company|drug companies",
+  government_public_health = "government|public health|health agency|medicare|medicaid"
+)
+
+# Function to count topic mentions
+count_topics <- function(data, dataset_name) {
+  data %>%
+    mutate(
+      cost_mention = str_detect(`Sound Bite Text`, regex(keywords$cost, ignore_case = TRUE)),
+      price_expense_mention = str_detect(`Sound Bite Text`, regex(keywords$price_expense, ignore_case = TRUE)),
+      pharma_mention = str_detect(`Sound Bite Text`, regex(keywords$pharma_companies, ignore_case = TRUE)),
+      government_mention = str_detect(`Sound Bite Text`, regex(keywords$government_public_health, ignore_case = TRUE))
+    ) %>%
+    summarise(
+      dataset = dataset_name,
+      cost_mentions = sum(cost_mention, na.rm = TRUE),
+      price_expense_mentions = sum(price_expense_mention, na.rm = TRUE),
+      pharma_mentions = sum(pharma_mention, na.rm = TRUE),
+      government_mentions = sum(government_mention, na.rm = TRUE),
+      total_entries = n()
+    )
+}
+
+reddit_topic_counts <- count_topics(dataReddit, "Reddit Dataset")
+non_reddit_topic_counts <- count_topics(dataNoReddit, "Non-Reddit Dataset")
+
+
+topic_comparison <- bind_rows(reddit_topic_counts, non_reddit_topic_counts)
+
+topic_comparison
+
+
+```
+
+Topic Modeling
+
+1\. Prepare the Data and Create the DTM (Document-Term Matrix)
+
+```{r}
+
+# Prepare data function, removing stop words and creating DTM
+prepare_for_topic_modeling <- function(data) {
+  tokenized_data <- data %>%
+    unnest_tokens(word, `Sound Bite Text`) %>%
+    anti_join(stop_words, by = "word") %>%
+    count(row_number(), word, sort = TRUE) %>%
+    cast_dtm(document = row_number(), term = word, value = n)
+  
+  return(tokenized_data)
+}
+
+# Create DTM for Reddit and Non-Reddit datasets
+dtm_reddit <- prepare_for_topic_modeling(dataReddit)
+dtm_non_reddit <- prepare_for_topic_modeling(dataNoReddit)
+
+```
+
+2\. Apply LDA to Identify Topics
+
+```{r}
+library(topicmodels)
+
+num_topics <- 7
+
+# Run LDA for both datasets
+reddit_lda <- LDA(dtm_reddit, k = num_topics, control = list(seed = 123))
+non_reddit_lda <- LDA(dtm_non_reddit, k = num_topics, control = list(seed = 123))
+
+
+```
+
+3\. Extract and Interpret Topics by Examining Top Terms
+
+```{r}
+library(tidytext)
+
+# Define a function to get the top terms for each topic
+get_top_terms <- function(lda_model, num_terms = 5) {
+  topics <- tidy(lda_model, matrix = "beta") %>%
+    group_by(topic) %>%
+    slice_max(beta, n = num_terms) %>%
+    ungroup() %>%
+    arrange(topic, -beta)
+  
+  return(topics)
+}
+
+
+top_terms_reddit <- get_top_terms(reddit_lda)
+top_terms_non_reddit <- get_top_terms(non_reddit_lda)
+
+top_terms_reddit
+top_terms_non_reddit
+
+
+```
+
+-   **topic**: The topic number.
+
+-   **term**: The word or term associated with the topic.
+
+-   **beta**: The probability of the term within the topic.
+
+## Task 7
+
+We used the LLM ChatGPT to extract the Sentiment towards the Continuous Glucose Monitor (CGM) they are using and the comorbidities/diseases being mentioned.
+
+```{r}
+# Set the seed for reproducibility
+set.seed(123)
+
+# Randomly sample 10 rows from the Sound Bite Text column
+sample_rows <- dataReddit %>%
+  slice_sample(n = 10) %>%
+  pull(`Sound Bite Text`)  # Replace `Sound Bite Text` with the actual column name if different
+
+# Display the sampled rows
+#sample_rows
+```
+
+| Sample | CGM                     | Sentiment | Comorbidity                               |
+|--------|------------------------|-----------|-------------------------------------------|
+| 1      | None                   | Neutral   | None                                      |
+| 2      | None                   | Positive  | None                                      |
+| 3      | Dexcom                 | Neutral   | None                                      |
+| 4      | G6                     | Positive  | None                                      |
+| 5      | None                   | Neutral   | None                                      |
+| 6      | None                   | Negative  | "Diabetes"                                |
+| 7      | None                   | Negative  | "Type 1 diabetes"                         |
+| 8      | None                   | Positive  | "T2D", "Dumping syndrome"                 |
+| 9      | None                   | Neutral   | "LADA", "Reactive hypoglycemia"          |
+| 10     | None                   | Negative  | "Obesity", "Diabetes"                    |
+
+
+
+## Task 9
+This code computes sentiment values for a dataset using VADER and Stanford CoreNLP, compares these values to pre-computed sentiment labels, and calculates the percentage agreement between them.
+
+```{r}
+# Reddit data only
+
+# Clean text data to handle non-ASCII characters
+dataReddit$'Sound Bite Text' <- iconv(dataReddit$'Sound Bite Text', from = "UTF-8", to = "UTF-8", sub = "byte")  # Convert and replace invalid characters
+dataReddit$'Sound Bite Text' <- gsub("[^[:print:]]", "", dataReddit$'Sound Bite Text')  # Remove non-printable characters
+
+# Perform sentiment analysis with syuzhet (NRC Lexicon)
+dataReddit$syuzhet_sentiment <- get_nrc_sentiment(dataReddit$'Sound Bite Text')
+
+# Simplify to positive, negative, or neutral based on NRC scores
+dataReddit$syuzhet_summary <- ifelse(
+  dataReddit$syuzhet_sentiment$positive > dataReddit$syuzhet_sentiment$negative, "Positives",
+  ifelse(dataReddit$syuzhet_sentiment$negative > dataReddit$syuzhet_sentiment$positive, "Negatives", "Neutrals")
+)
+
+# sentimentr sentiment analysis
+# Step 1: Add a unique identifier to the original data
+dataReddit <- dataReddit %>%
+  mutate(entry_id = row_number()) # Create unique identifier
+
+# Step 2: Calculate sentiment scores for the entire text
+sentimentr_scores <- sentiment(dataReddit$`Sound Bite Text`)
+
+# Step 3: Create a data frame to aggregate scores
+# Use row_number() to maintain the correct correspondence between sentiment scores and original data
+sentimentr_scores <- sentimentr_scores %>%
+  mutate(entry_id = row_number()) # Add entry_id for joining later
+
+# Step 4: Aggregate sentiment scores by the unique entry_id
+aggregated_scores <- sentimentr_scores %>%
+  group_by(entry_id) %>%
+  summarize(sentimentr_score = sum(sentiment), .groups = 'drop')
+
+# Step 5: Join the aggregated scores back to the original data
+dataReddit <- dataReddit %>%
+  left_join(aggregated_scores, by = "entry_id") # Joining on the unique identifier we created
+
+# Step 6: Summarize sentiment as positive, negative, or neutral
+dataReddit$sentimentr_summary <- ifelse(dataReddit$sentimentr_score > 0, "Positives",
+                                        ifelse(dataReddit$sentimentr_score < 0, "Negatives", "Neutrals"))
+
+# Assuming you have an existing sentiment column called `Sentiment`
+dataReddit$syuzhet_agreement <- ifelse(dataReddit$syuzhet_summary == dataReddit$Sentiment, 1, 0)
+dataReddit$sentimentr_agreement <- ifelse(dataReddit$sentimentr_summary == dataReddit$Sentiment, 1, 0)
+
+# Calculate percentages
+syuzhet_agreement_percentage <- mean(dataReddit$syuzhet_agreement, na.rm = TRUE) * 100
+sentimentr_agreement_percentage <- mean(dataReddit$sentimentr_agreement, na.rm = TRUE) * 100
+
+# Print the results
+cat("Syuzhet Agreement Percentage:", syuzhet_agreement_percentage, "%\n")
+cat("Sentimentr Agreement Percentage:", sentimentr_agreement_percentage, "%\n")
+
+```
+
+
