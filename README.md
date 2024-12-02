@@ -42,20 +42,18 @@ This project takes a fresh look at diabetes by examining what patients and careg
 ### 🚀 Installation
 
 
-### 🛠️ Usage
-
 ---
 
 ### 📊 Example Output
 - **Sentiment Analysis Summary:**
   - Positive 🟢, Neutral 🟡, Negative 🔴
 - **Topic Modeling:**
-  - Common themes: Insulin costs 💵, CGM reviews 📟, Health agency discussions 🏛️
+  - Common themes: Insulin costs 💵, Health agency discussions 🏛️
 
 ---
 
 ### 👥 Team
-- **Author**: Andrea Labra, [email](mailto:andrealabra21@gmail.com)
+- **Author**: Andrea Labra, Tevin Caranto [email](mailto:andrealabra21@gmail.com)
 
 ---
 
