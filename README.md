@@ -54,10 +54,3 @@ This project takes a fresh look at diabetes by examining what patients and careg
 
 ### 👥 Team
 - **Author**: Andrea Labra, Tevin Caranto [email](mailto:andrealabra21@gmail.com)
-
----
-
-### 🔗 References
-- Aspect-Based Sentiment Analysis [here](https://towardsdatascience.com/aspect-based-sentiment-analysis-using-spacy-textblob-4c8de3e0d2b9)
-- TextBlob Documentation [here](https://textblob.readthedocs.io/en/dev/)
-
