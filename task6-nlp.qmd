@@ -1,0 +1,116 @@
+---
+title: "nlpTask6"
+format: html
+editor: visual
+---
+
+## TASK 6 Topic Modeling 
+
+```{r}
+
+
+library(readxl)
+library(httr)
+
+url <- "https://raw.githubusercontent.com/andrealabra/NLP-Analysis-of-Consumer-Posts/main/(Clean)%20Diabetes%20Geo%20US%20No%20Reddit%202023%2050K%20rows.xlsx"
+
+temp_file <- tempfile(fileext = ".xlsx")
+GET(url, write_disk(temp_file, overwrite = TRUE))
+
+dataNoReddit <- read_excel(temp_file)
+
+head(dataNoReddit)
+unlink(temp_file)
+
+
+
+url2 <- "https://raw.githubusercontent.com/andrealabra/NLP-Analysis-of-Consumer-Posts/main/(Clean)%20Diabetes%20Reddit%20Data%20Combined.xlsx"
+
+temp_file2 <- tempfile(fileext = ".xlsx")
+GET(url2, write_disk(temp_file2, overwrite = TRUE))
+
+dataReddit <- read_excel(temp_file2)
+
+head(dataReddit)
+
+unlink(temp_file2)
+```
+
+```{r}
+library(tidyverse)
+library(tm)
+library(topicmodels)
+library(tidytext)
+library(ggplot2)
+library(SnowballC)
+library(NLP)
+library(slam)
+
+data_noreddit <- dataNoReddit
+data_reddit <- dataReddit
+
+# Combine datasets
+combined_data <- bind_rows(
+  mutate(data_noreddit, source = "NoReddit"),
+  mutate(data_reddit, source = "Reddit")
+)
+
+# Preprocess text
+clean_text <- combined_data %>%
+  mutate(cleaned_text = `Sound Bite Text` %>%   # Use backticks for variable names with spaces
+           str_to_lower() %>%                  # Convert text to lowercase
+           str_replace_all("[^a-z\\s]", "") %>% # Remove special characters
+           removeWords(stopwords("en")) %>%    # Remove stopwords
+           wordStem())                         # Apply stemming
+
+# Create a Document-Term Matrix
+dtm <- DocumentTermMatrix(
+  Corpus(VectorSource(clean_text$cleaned_text)),
+  control = list(wordLengths = c(3, Inf))       # Filter for words with 3 or more characters
+)
+
+# Optimize memory: Remove sparse terms
+dtm <- removeSparseTerms(dtm, 0.99)  # Retain terms appearing in at least 1% of documents
+
+# Check and remove empty rows in DTM
+dtm <- dtm[rowSums(as.matrix(dtm)) > 0, ]
+
+# Convert to a more memory-efficient sparse matrix
+dtm_sparse <- as.simple_triplet_matrix(dtm)
+
+#LDA for topic modeling
+set.seed(123)                                 
+lda_model <- LDA(dtm_sparse, k = 5, control = list(seed = 123)) 
+
+lda_terms <- tidy(lda_model, matrix = "beta") %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup()
+
+# Visualize top terms per topic
+lda_terms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip() +
+  labs(
+    title = "Top Terms for Each Topic",
+    x = "Term",
+    y = "Beta"
+  )
+
+# Assign topics to each document
+doc_topics <- tidy(lda_model, matrix = "gamma") %>%
+  group_by(document) %>%
+  top_n(1, gamma) %>%
+  ungroup()
+
+# Count documents by topic
+topic_summary <- doc_topics %>%
+  count(topic) %>%
+  arrange(desc(n))
+print(topic_summary)
+
+
+```
