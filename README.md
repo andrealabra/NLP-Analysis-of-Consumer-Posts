@@ -39,7 +39,7 @@ This project takes a fresh look at diabetes by examining what patients and careg
 
 ---
 
-### 🚀 Installation
+### 🚀 [Presentation](https://www.canva.com/design/DAGVWaIyMzo/XFk153B42saOaRMHZSgTpw/edit?utm_content=DAGVWaIyMzo&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton) 
 
 
 ---
